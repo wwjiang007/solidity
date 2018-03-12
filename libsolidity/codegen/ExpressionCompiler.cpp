@@ -845,7 +845,10 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
  				// make_shared<ArrayType>(DataLocation::Storage);
 			
 			
-
+			// stack: ArrayReference
+			
+			ArrayUtils(m_context).decrementDynamicArraySize(*arrayType);
+			
 			break;
 		}
 		case FunctionType::Kind::ObjectCreation:

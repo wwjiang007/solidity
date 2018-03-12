@@ -788,7 +788,7 @@ void ArrayUtils::decrementDynamicArraySize(ArrayType const& _type) const
 	else
 	{
 		m_context.appendInlineAssembly(R"({
-			let new_length := add(sload(ref), 1)
+			let new_length := sub(sload(ref), 1)
 			sstore(ref, new_length)
 			ref := new_length
 		})", {"ref"});
