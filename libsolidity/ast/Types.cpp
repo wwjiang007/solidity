@@ -1544,7 +1544,7 @@ MemberList::MemberMap ArrayType::nativeMembers(ContractDefinition const*) const
 			)});
 			members.push_back({"pop", make_shared<FunctionType>(
 				TypePointers{},
-				TypePointers{baseType()},
+				TypePointers{},
 				strings{string()},
 				strings{string()},
 				isByteArray() ? FunctionType::Kind::ByteArrayPop : FunctionType::Kind::ArrayPop

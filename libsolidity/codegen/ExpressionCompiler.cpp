@@ -837,18 +837,21 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		{
 			_functionCall.expression().accept(*this);
 			solAssert(function.parameterTypes().size() == 0, "");
-			// solAssert(!!function.parameterTypes()[0], "");
+			
+			ArrayType const& arrayType = dynamic_cast<ArrayType const&>(
+				*dynamic_cast<MemberAccess const&>(_functionCall.expression()).expression().annotation().type);
+			
+			solAssert(arrayType.dataStoredIn(DataLocation::Storage), "");
 
-			shared_ptr<ArrayType> arrayType = make_shared<ArrayType>(DataLocation::Storage);
- 				// function.kind() == FunctionType::Kind::ArrayPop ?
- 				// make_shared<ArrayType>(DataLocation::Storage, paramType) :
- 				// make_shared<ArrayType>(DataLocation::Storage);
-			
-			
 			// stack: ArrayReference
-			
-			ArrayUtils(m_context).decrementDynamicArraySize(*arrayType);
-			
+			ArrayUtils(m_context).retrieveLength(arrayType);
+			// stack: ArrayReference oldLength
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalInvalid();
+			// stack: ArrayReference oldLength
+			ArrayUtils(m_context).decrementDynamicArraySize(arrayType);
+			utils().popStackElement(arrayType);
+		
 			break;
 		}
 		case FunctionType::Kind::ObjectCreation:
