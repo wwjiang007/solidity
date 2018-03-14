@@ -783,15 +783,19 @@ void ArrayUtils::decrementDynamicArraySize(ArrayType const& _type) const
 
 	if (_type.isByteArray())
 	{
-
 	}
 	else
 	{
-		m_context.appendInlineAssembly(R"({
-			let new_length := sub(sload(ref), 1)
-			sstore(ref, new_length)
-			ref := new_length
-		})", {"ref"});
+        // Stack: ArrayReference oldLength
+        m_context << u256(1) << Instruction::SWAP1 << Instruction::SUB;
+        // Stack ArrayReference newLength
+        m_context << Instruction::DUP2 << Instruction::DUP2;
+        // Stack ArrayReference newLength ArrayReference newLength;
+        accessIndex(_type, false);
+        // Stack: ArrayReference newLength storage_slot byte_offset
+        StorageItem(m_context, _type).setToZero(SourceLocation(), true);
+        // Stack: ArrayReference newLength
+        m_context << Instruction::SSTORE;
 	}
 }
 
