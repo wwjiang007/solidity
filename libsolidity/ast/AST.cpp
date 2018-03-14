@@ -290,6 +290,12 @@ TypeDeclarationAnnotation& EnumDefinition::annotation() const
 	return dynamic_cast<TypeDeclarationAnnotation&>(*m_annotation);
 }
 
+ContractDefinition::ContractKind FunctionDefinition::inContractKind() const
+{
+	return dynamic_cast<ContractDefinition const*>(scope()) &&
+		dynamic_cast<ContractDefinition const*>(scope())->contractKind();
+}
+
 shared_ptr<FunctionType> FunctionDefinition::functionType(bool _internal) const
 {
 	if (_internal)
