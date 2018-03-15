@@ -69,8 +69,8 @@ public:
 	void resizeDynamicArray(ArrayType const& _type) const;
 	/// Decrements the size of a dynamic array by one.
 	/// Does not touch the new data element. In case of a byte array, this might move the data.
-    /// Stack pre: reference old_length
-    /// Stack post:
+	/// Stack pre: reference old_length
+	/// Stack post:
 	void decrementDynamicArraySize(ArrayType const& _type) const;
 	/// Appends a loop that clears a sequence of storage slots of the given type (excluding end).
 	/// Stack pre: end_ref start_ref

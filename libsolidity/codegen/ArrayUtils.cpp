@@ -786,16 +786,16 @@ void ArrayUtils::decrementDynamicArraySize(ArrayType const& _type) const
 	}
 	else
 	{
-        // Stack: ArrayReference oldLength
-        m_context << u256(1) << Instruction::SWAP1 << Instruction::SUB;
-        // Stack ArrayReference newLength
-        m_context << Instruction::DUP2 << Instruction::DUP2;
-        // Stack ArrayReference newLength ArrayReference newLength;
-        accessIndex(_type, false);
-        // Stack: ArrayReference newLength storage_slot byte_offset
-        StorageItem(m_context, _type).setToZero(SourceLocation(), true);
-        // Stack: ArrayReference newLength
-        m_context << Instruction::SSTORE;
+		// Stack: ArrayReference oldLength
+		m_context << u256(1) << Instruction::SWAP1 << Instruction::SUB;
+		// Stack ArrayReference newLength
+		m_context << Instruction::DUP2 << Instruction::DUP2;
+		// Stack ArrayReference newLength ArrayReference newLength;
+		accessIndex(_type, false);
+		// Stack: ArrayReference newLength storage_slot byte_offset
+		StorageItem(m_context, _type).setToZero(SourceLocation(), true);
+		// Stack: ArrayReference newLength
+		m_context << Instruction::SSTORE;
 	}
 }
 
