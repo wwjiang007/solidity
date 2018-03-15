@@ -836,23 +836,14 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::ArrayPop:
 		{
 			_functionCall.expression().accept(*this);
-			solAssert(function.parameterTypes().size() == 0, "");
+			solAssert(function.parameterTypes().empty(), "");
 
 			ArrayType const& arrayType = dynamic_cast<ArrayType const&>(
-				*dynamic_cast<MemberAccess const&>(_functionCall.expression()).expression().annotation().type);
-			
+				*dynamic_cast<MemberAccess const&>(_functionCall.expression()).expression().annotation().type
+			);
 			solAssert(arrayType.dataStoredIn(DataLocation::Storage), "");
 
-			// stack: ArrayReference
-			ArrayUtils(m_context).retrieveLength(arrayType);
-			// stack: ArrayReference oldLength
-			m_context << Instruction::DUP1;
-			// stack: ArrayReference oldLength oldLength
-			m_context << Instruction::ISZERO;
-			m_context.appendConditionalInvalid();
-			// stack: ArrayReference oldLength
-			ArrayUtils(m_context).decrementDynamicArraySize(arrayType);
-
+			ArrayUtils(m_context).popStorageArrayElement(arrayType);
 			break;
 		}
 		case FunctionType::Kind::ObjectCreation:
@@ -1229,14 +1220,18 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 		else if (member == "push")
 		{
 			solAssert(
-				type.isDynamicallySized() && type.location() == DataLocation::Storage,
+				type.isDynamicallySized() &&
+				type.location() == DataLocation::Storage &&
+				type.category() == Type::Category::Array,
 				"Tried to use .push() on a non-dynamically sized array"
 			);
 		}
 		else if (member == "pop")
 		{
 			solAssert(
-				type.isDynamicallySized() && type.location() == DataLocation::Storage,
+				type.isDynamicallySized() &&
+				type.location() == DataLocation::Storage &&
+				type.category() == Type::Category::Array,
 				"Tried to use .pop() on a non-dynamically sized array"
 			);
 		}

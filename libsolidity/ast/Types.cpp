@@ -1535,6 +1535,7 @@ MemberList::MemberMap ArrayType::nativeMembers(ContractDefinition const*) const
 	{
 		members.push_back({"length", make_shared<IntegerType>(256)});
 		if (isDynamicallySized() && location() == DataLocation::Storage)
+		{
 			members.push_back({"push", make_shared<FunctionType>(
 				TypePointers{baseType()},
 				TypePointers{make_shared<IntegerType>(256)},
@@ -1549,6 +1550,7 @@ MemberList::MemberMap ArrayType::nativeMembers(ContractDefinition const*) const
 				strings{string()},
 				isByteArray() ? FunctionType::Kind::ByteArrayPop : FunctionType::Kind::ArrayPop
 			)});
+		}
 	}
 	return members;
 }

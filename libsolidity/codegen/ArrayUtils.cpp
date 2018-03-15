@@ -774,12 +774,20 @@ void ArrayUtils::resizeDynamicArray(ArrayType const& _typeIn) const
 	);
 }
 
-void ArrayUtils::decrementDynamicArraySize(ArrayType const& _type) const
+void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 {
 	solAssert(_type.location() == DataLocation::Storage, "");
 	solAssert(_type.isDynamicallySized(), "");
 	if (!_type.isByteArray() && _type.baseType()->storageBytes() < 32)
 		solAssert(_type.baseType()->isValueType(), "Invalid storage size for non-value type.");
+
+	// stack: ArrayReference
+	retrieveLength(_type);
+	// stack: ArrayReference oldLength
+	m_context << Instruction::DUP1;
+	// stack: ArrayReference oldLength oldLength
+	m_context << Instruction::ISZERO;
+	m_context.appendConditionalInvalid();
 
 	if (_type.isByteArray())
 	{

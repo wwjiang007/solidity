@@ -4803,16 +4803,17 @@ BOOST_AUTO_TEST_CASE(array_pop)
 	char const* sourceCode = R"(
 		contract c {
 			uint[] data;
-			function test() public returns (uint x, uint y) {
+			function test() public returns (uint x, uint y, uint l) {
 				data.push(7);
 				x = data.push(3);
 				data.pop();
 				y = data.push(2);
+				l = data.length;
 			}
 		}
 	)";
 	compileAndRun(sourceCode);
-	ABI_CHECK(callContractFunction("test()"), encodeArgs(2, 2));
+	ABI_CHECK(callContractFunction("test()"), encodeArgs(2, 2, 2));
 }
 
 BOOST_AUTO_TEST_CASE(array_pop_empty)
@@ -4832,20 +4833,21 @@ BOOST_AUTO_TEST_CASE(array_pop_empty)
 
 BOOST_AUTO_TEST_CASE(bytearray_pop)
 {
-    char const* sourceCode = R"(
-        contract c {
-            bytes data;
-            function test() public returns (uint x, uint y) {
-                data.push(7);
-                x = data.push(3);
-                data.pop();
-                data.pop();
-                y = data.push(2);
-            }
-        }
-    )";
-    compileAndRun(sourceCode);
-    ABI_CHECK(callContractFunction("test()"), encodeArgs(2, 1));
+	char const* sourceCode = R"(
+		contract c {
+			bytes data;
+			function test() public returns (uint x, uint y, uint l) {
+				data.push(7);
+				x = data.push(3);
+				data.pop();
+				data.pop();
+				y = data.push(2);
+				l = data.length;
+			}
+		}
+	)";
+	compileAndRun(sourceCode);
+	ABI_CHECK(callContractFunction("test()"), encodeArgs(2, 1, 1));
 }
 
 BOOST_AUTO_TEST_CASE(bytearray_pop_empty)
