@@ -846,6 +846,8 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 			// stack: ArrayReference
 			ArrayUtils(m_context).retrieveLength(arrayType);
 			// stack: ArrayReference oldLength
+			m_context << Instruction::DUP1;
+			// stack: ArrayReference oldLength oldLength
 			m_context << Instruction::ISZERO;
 			m_context.appendConditionalInvalid();
 			// stack: ArrayReference oldLength
