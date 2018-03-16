@@ -1,6 +1,7 @@
 ### 0.4.22 (unreleased)
 
 Features:
+ * Syntax Checker: Warn about modifiers on functions without implementation (this will turn into an error with version 0.5.0).
 
 Bugfixes:
  * Code Generator: Allow ``block.blockhash`` without being called.
