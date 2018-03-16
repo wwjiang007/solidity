@@ -6,10 +6,12 @@ Bugfixes:
  * Code Generator: Allow ``block.blockhash`` without being called.
  * Code Generator: Properly skip unneeded storage array cleanup when not reducing length.
  * Code Generator: Bugfix in modifier lookup in libraries.
+ * Code Generator: Implement packed encoding of external function types.
  * Commandline interface: Support ``--evm-version constantinople`` properly.
  * DocString Parser: Fix error message for empty descriptions.
  * Standard JSON: Support ``constantinople`` as ``evmVersion`` properly.
  * Type System: Make external library functions accessible.
+ * Type System: Prevent encoding of weird types.
 
 ### 0.4.21 (2018-03-07)
 
