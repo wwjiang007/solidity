@@ -4804,19 +4804,38 @@ BOOST_AUTO_TEST_CASE(array_pop)
 		contract c {
 			uint[] data;
 			function test() public returns (uint x, uint y, uint l) {
-				data.push(7);
-				x = data.push(3);
+				x = data.push(7);
 				data.pop();
-				y = data.push(2);
+				y = data.push(3);
 				l = data.length;
 			}
 		}
 	)";
 	compileAndRun(sourceCode);
-	ABI_CHECK(callContractFunction("test()"), encodeArgs(2, 2, 2));
+	ABI_CHECK(callContractFunction("test()"), encodeArgs(1, 1, 1));
 }
 
-BOOST_AUTO_TEST_CASE(array_pop_empty)
+BOOST_AUTO_TEST_CASE(array_pop_complex)
+{
+	char const* sourceCode = R"(
+		contract c {
+			uint256 a;
+			uint[] data;
+			function test() public returns (uint x, uint l) {
+				data.push(7);
+				x = data.push(3);
+				data.pop();
+				x = data.length;
+				data.pop();
+				l = data.length;
+			}
+		}
+	)";
+	compileAndRun(sourceCode);
+	ABI_CHECK(callContractFunction("test()"), encodeArgs(1, 0));
+}
+
+BOOST_AUTO_TEST_CASE(array_pop_empty_exception)
 {
 	char const* sourceCode = R"(
 		contract c {
@@ -4829,6 +4848,22 @@ BOOST_AUTO_TEST_CASE(array_pop_empty)
 	)";
 	compileAndRun(sourceCode);
 	ABI_CHECK(callContractFunction("test()"), encodeArgs());
+}
+
+BOOST_AUTO_TEST_CASE(array_pop_storage_empty)
+{
+	char const* sourceCode = R"(
+		contract c {
+			uint[] data;
+			function test() public {
+				data.push(7);
+				data.pop();
+			}
+		}
+	)";
+	compileAndRun(sourceCode);
+	ABI_CHECK(callContractFunction("test()"), encodeArgs());
+	BOOST_CHECK(storageEmpty(m_contractAddress));
 }
 
 BOOST_AUTO_TEST_CASE(bytearray_pop)
@@ -4850,18 +4885,35 @@ BOOST_AUTO_TEST_CASE(bytearray_pop)
 	ABI_CHECK(callContractFunction("test()"), encodeArgs(2, 1, 1));
 }
 
-BOOST_AUTO_TEST_CASE(bytearray_pop_empty)
+BOOST_AUTO_TEST_CASE(bytearray_pop_empty_exception)
 {
 	char const* sourceCode = R"(
 		contract c {
 			bytes data;
 			function test() public returns (bool) {
 				data.pop();
+				return true;
 			}
 		}
 	)";
 	compileAndRun(sourceCode);
 	ABI_CHECK(callContractFunction("test()"), encodeArgs());
+}
+
+BOOST_AUTO_TEST_CASE(bytearray_pop_storage_empty)
+{
+	char const* sourceCode = R"(
+		contract c {
+			bytes data;
+			function test() public {
+				data.push(7);
+				data.pop();
+			}
+		}
+	)";
+	compileAndRun(sourceCode);
+	ABI_CHECK(callContractFunction("test()"), encodeArgs());
+	BOOST_CHECK(storageEmpty(m_contractAddress));
 }
 
 BOOST_AUTO_TEST_CASE(external_array_args)
