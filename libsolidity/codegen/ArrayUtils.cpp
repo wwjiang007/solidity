@@ -783,7 +783,6 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 
 	if (_type.isByteArray())
 	{
-		// <ref> <byte_number> = <base_ref + index / itemsPerSlot> <(index % itemsPerSlot) * byteSize>
 		m_context.appendInlineAssembly(R"({
 			let slot_value := sload(ref)
 			switch and(slot_value, 1)
@@ -793,8 +792,8 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 				if iszero(length) { invalid() }
 				// Zero-out the suffix of the byte array by masking it
 				// Do not zero-out the least significant byte
-				// ((1<<(8 * (31 - length))) - 1) << 8
-				let mask := mul(0x100, sub(exp(0x100, sub(31, length)), 1))
+				// ((1<<(8 * (32 - length))) - 1) << 8
+				let mask := mul(0x100, sub(exp(0x100, sub(32, length)), 1))
 				slot_value := and(not(mask), slot_value)
 				// Reduce the length by 1
 				slot_value := sub(slot_value, 2)
@@ -828,8 +827,8 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 
 					// Zero-out the suffix of the byte array by masking it
 					// Do not zero-out the least significant byte
-					// ((1<<(8 * (31 - offset))) - 1)
-					let mask := sub(exp(0x100, sub(31, offset)), 1)
+					// ((1<<(8 * (32 - offset))) - 1)
+					let mask := sub(exp(0x100, sub(32, offset)), 1)
 					data := and(not(mask), data)
 					sstore(slot, data)
 
