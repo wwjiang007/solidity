@@ -790,11 +790,13 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 				// short byte array
 				let length := and(div(slot_value, 2), 0x7f)
 				if iszero(length) { invalid() }
-				// Zero-out the suffix of the byte array by masking it
-				// Do not zero-out the least significant byte
+
+				// Zero-out the suffix of the byte array by masking it.
+				// Do not zero-out the least significant byte.
 				// ((1<<(8 * (32 - length))) - 1) << 8
 				let mask := mul(0x100, sub(exp(0x100, sub(32, length)), 1))
 				slot_value := and(not(mask), slot_value)
+
 				// Reduce the length by 1
 				slot_value := sub(slot_value, 2)
 				sstore(ref, slot_value)
@@ -802,31 +804,25 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 			case 1 {
 				// long byte array
 				let length := div(slot_value, 2)
+				mstore(0, ref)
 
 				switch length
 				case 32
 				{
-					let slot := 0
-					let offset := 31
-
-					mstore(0, ref)
-					slot := add(keccak256(0, 0x20), slot)
+					let slot := keccak256(0, 0x20)
 					let data := sload(slot)
 					sstore(slot, 0)
-					data := and(data, not(0xFF))
+					data := and(data, not(0xff))
 					sstore(ref, or(data, 62))
 				}
 				default
 				{
 					let slot := div(sub(length, 1), 32)
-					let offset := and(sub(length, 1), 0x1F)
-
-					mstore(0, ref)
+					let offset := and(sub(length, 1), 0x1f)
 					slot := add(keccak256(0, 0x20), slot)
 					let data := sload(slot)
 
-					// Zero-out the suffix of the byte array by masking it
-					// Do not zero-out the least significant byte
+					// Zero-out the suffix of the byte array by masking it.
 					// ((1<<(8 * (32 - offset))) - 1)
 					let mask := sub(exp(0x100, sub(32, offset)), 1)
 					data := and(not(mask), data)
@@ -835,8 +831,8 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 					// Reduce the length by 1
 					slot_value := sub(slot_value, 2)
 					sstore(ref, slot_value)
-			   }
-		   }
+				}
+			}
 		})", {"ref"});
 		m_context << Instruction::POP;
 	}
