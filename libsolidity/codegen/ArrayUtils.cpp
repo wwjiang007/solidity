@@ -788,13 +788,14 @@ void ArrayUtils::popStorageArrayElement(ArrayType const& _type) const
 			switch and(slot_value, 1)
 			case 0 {
 				// short byte array
-				let length := and(div(slot_value, 2), 0x7f)
+				let length := and(div(slot_value, 2), 0x3f)
 				if iszero(length) { invalid() }
 
 				// Zero-out the suffix of the byte array by masking it.
-				// Do not zero-out the least significant byte.
-				// ((1<<(8 * (32 - length))) - 1) << 8
-				let mask := mul(0x100, sub(exp(0x100, sub(32, length)), 1))
+				// Do not zero-out the least significant byte, but mask the
+				// higher bits of the length.
+				// (((1<<(8 * (32 - length))) - 1) << 8) + 128
+				let mask := add(mul(0x100, sub(exp(0x100, sub(32, length)), 1)), 0x80)
 				slot_value := and(not(mask), slot_value)
 
 				// Reduce the length by 1
