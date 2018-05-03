@@ -54,7 +54,7 @@ The following elementary types exist:
 
 - ``ufixed<M>x<N>``: unsigned variant of ``fixed<M>x<N>``.
 
-- ``fixed``, ``ufixed``: synonyms for ``fixed128x19``, ``ufixed128x19`` respectively. For computing the function selector, ``fixed128x19`` and ``ufixed128x19`` have to be used.
+- ``fixed``, ``ufixed``: synonyms for ``fixed128x18``, ``ufixed128x18`` respectively. For computing the function selector, ``fixed128x18`` and ``ufixed128x18`` have to be used.
 
 - ``bytes<M>``: binary type of ``M`` bytes, ``0 < M <= 32``.
 
@@ -77,7 +77,7 @@ of them inside parentheses, separated by commas:
 
 - ``(T1,T2,...,Tn)``: tuple consisting of the types ``T1``, ..., ``Tn``, ``n >= 0``
 
-It is possible to form tuples of tuples, arrays of tuples and so on.
+It is possible to form tuples of tuples, arrays of tuples and so on.  It is also possible to form zero-tuples (where ``n == 0``).
 
 .. note::
     Solidity supports all the types presented above with the same names with the exception of tuples. The ABI tuple type is utilised for encoding Solidity ``structs``.
@@ -117,7 +117,7 @@ on the type of ``X`` being
 
 - ``(T1,...,Tk)`` for ``k >= 0`` and any types ``T1``, ..., ``Tk``
 
-  ``enc(X) = head(X(1)) ... head(X(k-1)) tail(X(0)) ... tail(X(k-1))``
+  ``enc(X) = head(X(1)) ... head(X(k)) tail(X(1)) ... tail(X(k))``
 
   where ``X(i)`` is the ``ith`` component of the value, and
   ``head`` and ``tail`` are defined for ``Ti`` being a static type as
@@ -126,7 +126,7 @@ on the type of ``X`` being
 
   and as
 
-    ``head(X(i)) = enc(len(head(X(0)) ... head(X(k-1)) tail(X(0)) ... tail(X(i-1))))``
+    ``head(X(i)) = enc(len( head(X(1)) ... head(X(k)) tail(X(1)) ... tail(X(i-1)) ))``
     ``tail(X(i)) = enc(X(i))``
 
   otherwise, i.e. if ``Ti`` is a dynamic type.
@@ -137,7 +137,7 @@ on the type of ``X`` being
 
 - ``T[k]`` for any ``T`` and ``k``:
 
-  ``enc(X) = enc((X[0], ..., X[k-1]))``
+  ``enc(X) = enc((X[1], ..., X[k]))``
 
   i.e. it is encoded as if it were a tuple with ``k`` elements
   of the same type.
@@ -164,9 +164,9 @@ on the type of ``X`` being
 - ``int<M>``: ``enc(X)`` is the big-endian two's complement encoding of ``X``, padded on the higher-order (left) side with ``0xff`` for negative ``X`` and with zero bytes for positive ``X`` such that the length is 32 bytes.
 - ``bool``: as in the ``uint8`` case, where ``1`` is used for ``true`` and ``0`` for ``false``
 - ``fixed<M>x<N>``: ``enc(X)`` is ``enc(X * 10**N)`` where ``X * 10**N`` is interpreted as a ``int256``.
-- ``fixed``: as in the ``fixed128x19`` case
+- ``fixed``: as in the ``fixed128x18`` case
 - ``ufixed<M>x<N>``: ``enc(X)`` is ``enc(X * 10**N)`` where ``X * 10**N`` is interpreted as a ``uint256``.
-- ``ufixed``: as in the ``ufixed128x19`` case
+- ``ufixed``: as in the ``ufixed128x18`` case
 - ``bytes<M>``: ``enc(X)`` is the sequence of bytes in ``X`` padded with trailing zero-bytes to a length of 32 bytes.
 
 Note that for any ``X``, ``len(enc(X))`` is a multiple of 32.

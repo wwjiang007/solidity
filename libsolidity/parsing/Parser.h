@@ -56,6 +56,7 @@ private:
 	/// This struct is shared for parsing a function header and a function type.
 	struct FunctionHeaderParserResult
 	{
+		bool isConstructor;
 		ASTPointer<ASTString> name;
 		ASTPointer<ParameterList> parameters;
 		ASTPointer<ParameterList> returnParameters;
@@ -73,7 +74,11 @@ private:
 	ASTPointer<InheritanceSpecifier> parseInheritanceSpecifier();
 	Declaration::Visibility parseVisibilitySpecifier(Token::Value _token);
 	StateMutability parseStateMutability(Token::Value _token);
-	FunctionHeaderParserResult parseFunctionHeader(bool _forceEmptyName, bool _allowModifiers);
+	FunctionHeaderParserResult parseFunctionHeader(
+		bool _forceEmptyName,
+		bool _allowModifiers,
+		ASTString const* _contractName = nullptr
+	);
 	ASTPointer<ASTNode> parseFunctionDefinitionOrFunctionTypeStateVariable(ASTString const* _contractName);
 	ASTPointer<FunctionDefinition> parseFunctionDefinition(ASTString const* _contractName);
 	ASTPointer<StructDefinition> parseStructDefinition();
@@ -140,21 +145,25 @@ private:
 	{
 		IndexAccessStructure, VariableDeclarationStatement, ExpressionStatement
 	};
+	/// Structure that represents a.b.c[x][y][z]. Can be converted either to an expression
+	/// or to a type name. Path cannot be empty, but indices can be empty.
+	struct IndexAccessedPath
+	{
+		std::vector<ASTPointer<PrimaryExpression>> path;
+		std::vector<std::pair<ASTPointer<Expression>, SourceLocation>> indices;
+	};
 
 	/// Performs limited look-ahead to distinguish between variable declaration and expression statement.
 	/// For source code of the form "a[][8]" ("IndexAccessStructure"), this is not possible to
 	/// decide with constant look-ahead.
 	LookAheadInfo peekStatementType() const;
+	/// @returns an IndexAccessedPath as a prestage to parsing a variable declaration (type name)
+	/// or an expression;
+	IndexAccessedPath parseIndexAccessedPath();
 	/// @returns a typename parsed in look-ahead fashion from something like "a.b[8][2**70]".
-	ASTPointer<TypeName> typeNameIndexAccessStructure(
-		std::vector<ASTPointer<PrimaryExpression>> const& _path,
-		std::vector<std::pair<ASTPointer<Expression>, SourceLocation>> const& _indices
-	);
+	ASTPointer<TypeName> typeNameFromIndexAccessStructure(IndexAccessedPath const& _pathAndIndices);
 	/// @returns an expression parsed in look-ahead fashion from something like "a.b[8][2**70]".
-	ASTPointer<Expression> expressionFromIndexAccessStructure(
-		std::vector<ASTPointer<PrimaryExpression>> const& _path,
-		std::vector<std::pair<ASTPointer<Expression>, SourceLocation>> const& _indices
-	);
+	ASTPointer<Expression> expressionFromIndexAccessStructure(IndexAccessedPath const& _pathAndIndices);
 
 	std::string currentTokenName();
 	Token::Value expectAssignmentOperator();

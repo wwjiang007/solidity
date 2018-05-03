@@ -55,7 +55,8 @@ public:
 	explicit CompilerContext(EVMVersion _evmVersion = EVMVersion{}, CompilerContext* _runtimeContext = nullptr):
 		m_asm(std::make_shared<eth::Assembly>()),
 		m_evmVersion(_evmVersion),
-		m_runtimeContext(_runtimeContext)
+		m_runtimeContext(_runtimeContext),
+		m_abiFunctions(m_evmVersion)
 	{
 		if (m_runtimeContext)
 			m_runtimeSub = size_t(m_asm->newSub(m_runtimeContext->m_asm).data());
@@ -156,8 +157,11 @@ public:
 	CompilerContext& appendConditionalInvalid();
 	/// Appends a REVERT(0, 0) call
 	CompilerContext& appendRevert();
-	/// Appends a conditional REVERT(0, 0) call
-	CompilerContext& appendConditionalRevert();
+	/// Appends a conditional REVERT-call, either forwarding the RETURNDATA or providing the
+	/// empty string. Consumes the condition.
+	/// If the current EVM version does not support RETURNDATA, uses REVERT but does not forward
+	/// the data.
+	CompilerContext& appendConditionalRevert(bool _forwardReturnData = false);
 	/// Appends a JUMP to a specific tag
 	CompilerContext& appendJumpTo(eth::AssemblyItem const& _tag) { m_asm->appendJump(_tag); return *this; }
 	/// Appends pushing of a new tag and @returns the new tag.

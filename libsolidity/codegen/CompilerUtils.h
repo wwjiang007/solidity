@@ -54,6 +54,13 @@ public:
 	/// Stack post: <size> <mem_start>
 	void toSizeAfterFreeMemoryPointer();
 
+	/// Appends code that performs a revert, providing the given string data.
+	/// Will also append an error signature corresponding to Error(string).
+	/// @param _argumentType the type of the string argument, will be converted to memory string.
+	/// Stack pre: string data
+	/// Stack post:
+	void revertWithStringData(Type const& _argumentType);
+
 	/// Loads data from memory to the stack.
 	/// @param _offset offset in memory (or calldata)
 	/// @param _type data type to load
@@ -188,7 +195,8 @@ public:
 	/// Appends code that combines the construction-time (if available) and runtime function
 	/// entry label of the given function into a single stack slot.
 	/// Note: This might cause the compilation queue of the runtime context to be extended.
-	void pushCombinedFunctionEntryLabel(Declaration const& _function);
+	/// If @a _runtimeOnly, the entry label will include the runtime assembly tag.
+	void pushCombinedFunctionEntryLabel(Declaration const& _function, bool _runtimeOnly = true);
 
 	/// Appends code for an implicit or explicit type conversion. This includes erasing higher
 	/// order bits (@see appendHighBitCleanup) when widening integer but also copy to memory
@@ -209,6 +217,9 @@ public:
 	/// Creates a zero-value for the given type and puts it onto the stack. This might allocate
 	/// memory for memory references.
 	void pushZeroValue(Type const& _type);
+	/// Pushes a pointer to the stack that points to a (potentially shared) location in memory
+	/// that always contains a zero. It is not allowed to write there.
+	void pushZeroPointer();
 
 	/// Moves the value that is at the top of the stack to a stack variable.
 	void moveToStackVariable(VariableDeclaration const& _variable);
@@ -243,7 +254,7 @@ public:
 	/// Helper function to shift top value on the stack to the right.
 	/// Stack pre: <value> <shift_by_bits>
 	/// Stack post: <shifted_value>
-	void rightShiftNumberOnStack(unsigned _bits, bool _isSigned = false);
+	void rightShiftNumberOnStack(unsigned _bits);
 
 	/// Appends code that computes tha Keccak-256 hash of the topmost stack element of 32 byte type.
 	void computeHashStatic();
@@ -254,6 +265,10 @@ public:
 
 	/// Position of the free-memory-pointer in memory;
 	static const size_t freeMemoryPointer;
+	/// Position of the memory slot that is always zero.
+	static const size_t zeroPointer;
+	/// Starting offset for memory available to the user (aka the contract).
+	static const size_t generalPurposeMemoryStart;
 
 private:
 	/// Address of the precompiled identity contract.

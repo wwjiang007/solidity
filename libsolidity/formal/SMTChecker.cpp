@@ -19,6 +19,8 @@
 
 #ifdef HAVE_Z3
 #include <libsolidity/formal/Z3Interface.h>
+#elif HAVE_CVC4
+#include <libsolidity/formal/CVC4Interface.h>
 #else
 #include <libsolidity/formal/SMTLib2Interface.h>
 #endif
@@ -39,6 +41,8 @@ using namespace dev::solidity;
 SMTChecker::SMTChecker(ErrorReporter& _errorReporter, ReadCallback::Callback const& _readFileCallback):
 #ifdef HAVE_Z3
 	m_interface(make_shared<smt::Z3Interface>()),
+#elif HAVE_CVC4
+	m_interface(make_shared<smt::CVC4Interface>()),
 #else
 	m_interface(make_shared<smt::SMTLib2Interface>(_readFileCallback)),
 #endif
@@ -73,7 +77,7 @@ bool SMTChecker::visit(FunctionDefinition const& _function)
 	m_interface->reset();
 	m_variables.clear();
 	m_pathConditions.clear();
-	m_conditionalExecutionHappened = false;
+	m_loopExecutionHappened = false;
 	initializeLocalVariables(_function);
 	return true;
 }
@@ -128,6 +132,7 @@ bool SMTChecker::visit(WhileStatement const& _node)
 
 		visitBranch(_node.body(), expr(_node.condition()));
 	}
+	m_loopExecutionHappened = true;
 	resetVariables(touchedVariables);
 
 	return false;
@@ -167,7 +172,7 @@ bool SMTChecker::visit(ForStatement const& _node)
 
 	m_interface->pop();
 
-	m_conditionalExecutionHappened = true;
+	m_loopExecutionHappened = true;
 	std::swap(sequenceCountersStart, m_variables);
 
 	resetVariables(touchedVariables);
@@ -464,7 +469,7 @@ void SMTChecker::compareOperation(BinaryOperation const& _op)
 		}
 		else // Bool
 		{
-			solAssert(SSAVariable::isBool(_op.annotation().commonType->category()), "");
+			solUnimplementedAssert(SSAVariable::isBool(_op.annotation().commonType->category()), "Operation not yet supported");
 			value = make_shared<smt::Expression>(
 				op == Token::Equal ? (left == right) :
 				op == Token::NotEqual ? (left != right) :
@@ -544,7 +549,6 @@ SMTChecker::VariableSequenceCounters SMTChecker::visitBranch(Statement const& _s
 	if (_condition)
 		popPathCondition();
 
-	m_conditionalExecutionHappened = true;
 	std::swap(m_variables, beforeVars);
 
 	return beforeVars;
@@ -587,10 +591,10 @@ void SMTChecker::checkCondition(
 	vector<string> values;
 	tie(result, values) = checkSatisfiableAndGenerateModel(expressionsToEvaluate);
 
-	string conditionalComment;
-	if (m_conditionalExecutionHappened)
-		conditionalComment =
-			"\nNote that some information is erased after conditional execution of parts of the code.\n"
+	string loopComment;
+	if (m_loopExecutionHappened)
+		loopComment =
+			"\nNote that some information is erased after the execution of loops.\n"
 			"You can re-introduce information using require().";
 	switch (result)
 	{
@@ -607,13 +611,13 @@ void SMTChecker::checkCondition(
 		}
 		else
 			message << ".";
-		m_errorReporter.warning(_location, message.str() + conditionalComment);
+		m_errorReporter.warning(_location, message.str() + loopComment);
 		break;
 	}
 	case smt::CheckResult::UNSATISFIABLE:
 		break;
 	case smt::CheckResult::UNKNOWN:
-		m_errorReporter.warning(_location, _description + " might happen here." + conditionalComment);
+		m_errorReporter.warning(_location, _description + " might happen here." + loopComment);
 		break;
 	case smt::CheckResult::ERROR:
 		m_errorReporter.warning(_location, "Error trying to invoke SMT solver.");
@@ -835,7 +839,7 @@ void SMTChecker::createExpr(Expression const& _e)
 			m_expressions.emplace(&_e, m_interface->newBool(uniqueSymbol(_e)));
 			break;
 		default:
-			solAssert(false, "Type not implemented.");
+			solUnimplementedAssert(false, "Type not implemented.");
 		}
 	}
 }

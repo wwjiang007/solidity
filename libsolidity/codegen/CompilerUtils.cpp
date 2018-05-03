@@ -21,6 +21,7 @@
  */
 
 #include <libsolidity/codegen/CompilerUtils.h>
+
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/codegen/ArrayUtils.h>
 #include <libsolidity/codegen/LValue.h>
@@ -39,11 +40,17 @@ namespace solidity
 
 const unsigned CompilerUtils::dataStartOffset = 4;
 const size_t CompilerUtils::freeMemoryPointer = 64;
+const size_t CompilerUtils::zeroPointer = CompilerUtils::freeMemoryPointer + 32;
+const size_t CompilerUtils::generalPurposeMemoryStart = CompilerUtils::zeroPointer + 32;
 const unsigned CompilerUtils::identityContractAddress = 4;
+
+static_assert(CompilerUtils::freeMemoryPointer >= 64, "Free memory pointer must not overlap with scratch area.");
+static_assert(CompilerUtils::zeroPointer >= CompilerUtils::freeMemoryPointer + 32, "Zero pointer must not overlap with free memory pointer.");
+static_assert(CompilerUtils::generalPurposeMemoryStart >= CompilerUtils::zeroPointer + 32, "General purpose memory must not overlap with zero area.");
 
 void CompilerUtils::initialiseFreeMemoryPointer()
 {
-	m_context << u256(freeMemoryPointer + 32);
+	m_context << u256(generalPurposeMemoryStart);
 	storeFreeMemoryPointer();
 }
 
@@ -69,6 +76,20 @@ void CompilerUtils::toSizeAfterFreeMemoryPointer()
 	fetchFreeMemoryPointer();
 	m_context << Instruction::DUP1 << Instruction::SWAP2 << Instruction::SUB;
 	m_context << Instruction::SWAP1;
+}
+
+void CompilerUtils::revertWithStringData(Type const& _argumentType)
+{
+	solAssert(_argumentType.isImplicitlyConvertibleTo(*Type::fromElementaryTypeName("string memory")), "");
+	fetchFreeMemoryPointer();
+	m_context << (u256(FixedHash<4>::Arith(FixedHash<4>(dev::keccak256("Error(string)")))) << (256 - 32));
+	m_context << Instruction::DUP2 << Instruction::MSTORE;
+	m_context << u256(4) << Instruction::ADD;
+	// Stack: <string data> <mem pos of encoding start>
+	abiEncode({_argumentType.shared_from_this()}, {make_shared<ArrayType>(DataLocation::Memory, true)});
+	toSizeAfterFreeMemoryPointer();
+	m_context << Instruction::REVERT;
+	m_context.adjustStackOffset(_argumentType.sizeOnStack());
 }
 
 unsigned CompilerUtils::loadFromMemory(
@@ -142,7 +163,6 @@ void CompilerUtils::storeInMemoryDynamic(Type const& _type, bool _padToWordBound
 		dynamic_cast<FunctionType const&>(_type).kind() == FunctionType::Kind::External
 	)
 	{
-		solUnimplementedAssert(_padToWordBoundaries, "Non-padded store for function not implemented.");
 		combineExternalFunctionType(true);
 		m_context << Instruction::DUP2 << Instruction::MSTORE;
 		m_context << u256(_padToWordBoundaries ? 32 : 24) << Instruction::ADD;
@@ -496,14 +516,34 @@ void CompilerUtils::abiDecodeV2(TypePointers const& _parameterTypes, bool _fromM
 
 void CompilerUtils::zeroInitialiseMemoryArray(ArrayType const& _type)
 {
-	auto repeat = m_context.newTag();
-	m_context << repeat;
-	pushZeroValue(*_type.baseType());
-	storeInMemoryDynamic(*_type.baseType());
-	m_context << Instruction::SWAP1 << u256(1) << Instruction::SWAP1;
-	m_context << Instruction::SUB << Instruction::SWAP1;
-	m_context << Instruction::DUP2;
-	m_context.appendConditionalJumpTo(repeat);
+	if (_type.baseType()->hasSimpleZeroValueInMemory())
+	{
+		solAssert(_type.baseType()->isValueType(), "");
+		Whiskers templ(R"({
+			let size := mul(length, <element_size>)
+			// cheap way of zero-initializing a memory range
+			codecopy(memptr, codesize(), size)
+			memptr := add(memptr, size)
+		})");
+		templ("element_size", to_string(_type.baseType()->memoryHeadSize()));
+		m_context.appendInlineAssembly(templ.render(), {"length", "memptr"});
+	}
+	else
+	{
+		// TODO: Potential optimization:
+		// When we create a new multi-dimensional dynamic array, each element
+		// is initialized to an empty array. It actually does not hurt
+		// to re-use exactly the same empty array for all elements. Currently,
+		// a new one is created each time.
+		auto repeat = m_context.newTag();
+		m_context << repeat;
+		pushZeroValue(*_type.baseType());
+		storeInMemoryDynamic(*_type.baseType());
+		m_context << Instruction::SWAP1 << u256(1) << Instruction::SWAP1;
+		m_context << Instruction::SUB << Instruction::SWAP1;
+		m_context << Instruction::DUP2;
+		m_context.appendConditionalJumpTo(repeat);
+	}
 	m_context << Instruction::SWAP1 << Instruction::POP;
 }
 
@@ -559,15 +599,15 @@ void CompilerUtils::splitExternalFunctionType(bool _leftAligned)
 	if (_leftAligned)
 	{
 		m_context << Instruction::DUP1;
-		rightShiftNumberOnStack(64 + 32, false);
+		rightShiftNumberOnStack(64 + 32);
 		// <input> <address>
 		m_context << Instruction::SWAP1;
-		rightShiftNumberOnStack(64, false);
+		rightShiftNumberOnStack(64);
 	}
 	else
 	{
 		m_context << Instruction::DUP1;
-		rightShiftNumberOnStack(32, false);
+		rightShiftNumberOnStack(32);
 		m_context << ((u256(1) << 160) - 1) << Instruction::AND << Instruction::SWAP1;
 	}
 	m_context << u256(0xffffffffUL) << Instruction::AND;
@@ -585,7 +625,7 @@ void CompilerUtils::combineExternalFunctionType(bool _leftAligned)
 		leftShiftNumberOnStack(64);
 }
 
-void CompilerUtils::pushCombinedFunctionEntryLabel(Declaration const& _function)
+void CompilerUtils::pushCombinedFunctionEntryLabel(Declaration const& _function, bool _runtimeOnly)
 {
 	m_context << m_context.functionEntryLabel(_function).pushTag();
 	// If there is a runtime context, we have to merge both labels into the same
@@ -593,9 +633,10 @@ void CompilerUtils::pushCombinedFunctionEntryLabel(Declaration const& _function)
 	if (CompilerContext* rtc = m_context.runtimeContext())
 	{
 		leftShiftNumberOnStack(32);
-		m_context <<
-			rtc->functionEntryLabel(_function).toSubAssemblyTag(m_context.runtimeSub()) <<
-			Instruction::OR;
+		if (_runtimeOnly)
+			m_context <<
+				rtc->functionEntryLabel(_function).toSubAssemblyTag(m_context.runtimeSub()) <<
+				Instruction::OR;
 	}
 }
 
@@ -634,7 +675,7 @@ void CompilerUtils::convertType(
 			// conversion from bytes to integer. no need to clean the high bit
 			// only to shift right because of opposite alignment
 			IntegerType const& targetIntegerType = dynamic_cast<IntegerType const&>(_targetType);
-			rightShiftNumberOnStack(256 - typeOnStack.numBytes() * 8, false);
+			rightShiftNumberOnStack(256 - typeOnStack.numBytes() * 8);
 			if (targetIntegerType.numBits() < typeOnStack.numBytes() * 8)
 				convertType(IntegerType(typeOnStack.numBytes() * 8), _targetType, _cleanupNeeded);
 		}
@@ -643,19 +684,17 @@ void CompilerUtils::convertType(
 			// clear for conversion to longer bytes
 			solAssert(targetTypeCategory == Type::Category::FixedBytes, "Invalid type conversion requested.");
 			FixedBytesType const& targetType = dynamic_cast<FixedBytesType const&>(_targetType);
-			if (targetType.numBytes() > typeOnStack.numBytes() || _cleanupNeeded)
+			if (typeOnStack.numBytes() == 0 || targetType.numBytes() == 0)
+				m_context << Instruction::POP << u256(0);
+			else if (targetType.numBytes() > typeOnStack.numBytes() || _cleanupNeeded)
 			{
-				if (typeOnStack.numBytes() == 0)
-					m_context << Instruction::POP << u256(0);
-				else
-				{
-					m_context << ((u256(1) << (256 - typeOnStack.numBytes() * 8)) - 1);
-					m_context << Instruction::NOT << Instruction::AND;
-				}
+				int bytes = min(typeOnStack.numBytes(), targetType.numBytes());
+				m_context << ((u256(1) << (256 - bytes * 8)) - 1);
+				m_context << Instruction::NOT << Instruction::AND;
 			}
 		}
-	}
 		break;
+	}
 	case Type::Category::Enum:
 		solAssert(_targetType == _typeOnStack || targetTypeCategory == Type::Category::Integer, "");
 		if (enumOverflowCheckPending)
@@ -664,6 +703,7 @@ void CompilerUtils::convertType(
 			solAssert(enumType.numberOfMembers() > 0, "empty enum should have caused a parser error.");
 			m_context << u256(enumType.numberOfMembers() - 1) << Instruction::DUP2 << Instruction::GT;
 			if (_asPartOfArgumentDecoding)
+				// TODO: error message?
 				m_context.appendConditionalRevert();
 			else
 				m_context.appendConditionalInvalid();
@@ -756,8 +796,9 @@ void CompilerUtils::convertType(
 		bytesConstRef data(value);
 		if (targetTypeCategory == Type::Category::FixedBytes)
 		{
+			int const numBytes = dynamic_cast<FixedBytesType const&>(_targetType).numBytes();
 			solAssert(data.size() <= 32, "");
-			m_context << h256::Arith(h256(data, h256::AlignLeft));
+			m_context << (h256::Arith(h256(data, h256::AlignLeft)) & (~(u256(-1) >> (8 * numBytes))));
 		}
 		else if (targetTypeCategory == Type::Category::Array)
 		{
@@ -1031,6 +1072,13 @@ void CompilerUtils::pushZeroValue(Type const& _type)
 		return;
 	}
 	solAssert(referenceType->location() == DataLocation::Memory, "");
+	if (auto arrayType = dynamic_cast<ArrayType const*>(&_type))
+		if (arrayType->isDynamicallySized())
+		{
+			// Push a memory location that is (hopefully) always zero.
+			pushZeroPointer();
+			return;
+		}
 
 	TypePointer type = _type.shared_from_this();
 	m_context.callLowLevelFunction(
@@ -1051,13 +1099,8 @@ void CompilerUtils::pushZeroValue(Type const& _type)
 				}
 			else if (auto arrayType = dynamic_cast<ArrayType const*>(type.get()))
 			{
-				if (arrayType->isDynamicallySized())
-				{
-					// zero length
-					_context << u256(0);
-					utils.storeInMemoryDynamic(IntegerType(256));
-				}
-				else if (arrayType->length() > 0)
+				solAssert(!arrayType->isDynamicallySized(), "");
+				if (arrayType->length() > 0)
 				{
 					_context << arrayType->length() << Instruction::SWAP1;
 					// stack: items_to_do memory_pos
@@ -1072,6 +1115,11 @@ void CompilerUtils::pushZeroValue(Type const& _type)
 			_context << Instruction::POP;
 		}
 	);
+}
+
+void CompilerUtils::pushZeroPointer()
+{
+	m_context << u256(zeroPointer);
 }
 
 void CompilerUtils::moveToStackVariable(VariableDeclaration const& _variable)
@@ -1194,7 +1242,7 @@ unsigned CompilerUtils::loadFromMemoryHelper(Type const& _type, bool _fromCallda
 		bool leftAligned = _type.category() == Type::Category::FixedBytes;
 		// add leading or trailing zeros by dividing/multiplying depending on alignment
 		int shiftFactor = (32 - numBytes) * 8;
-		rightShiftNumberOnStack(shiftFactor, false);
+		rightShiftNumberOnStack(shiftFactor);
 		if (leftAligned)
 			leftShiftNumberOnStack(shiftFactor);
 	}
@@ -1217,13 +1265,20 @@ void CompilerUtils::cleanHigherOrderBits(IntegerType const& _typeOnStack)
 void CompilerUtils::leftShiftNumberOnStack(unsigned _bits)
 {
 	solAssert(_bits < 256, "");
-	m_context << (u256(1) << _bits) << Instruction::MUL;
+	if (m_context.evmVersion().hasBitwiseShifting())
+		m_context << _bits << Instruction::SHL;
+	else
+		m_context << (u256(1) << _bits) << Instruction::MUL;
 }
 
-void CompilerUtils::rightShiftNumberOnStack(unsigned _bits, bool _isSigned)
+void CompilerUtils::rightShiftNumberOnStack(unsigned _bits)
 {
 	solAssert(_bits < 256, "");
-	m_context << (u256(1) << _bits) << Instruction::SWAP1 << (_isSigned ? Instruction::SDIV : Instruction::DIV);
+	// NOTE: If we add signed right shift, SAR rounds differently than SDIV
+	if (m_context.evmVersion().hasBitwiseShifting())
+		m_context << _bits << Instruction::SHR;
+	else
+		m_context << (u256(1) << _bits) << Instruction::SWAP1 << Instruction::DIV;
 }
 
 unsigned CompilerUtils::prepareMemoryStore(Type const& _type, bool _padToWords)

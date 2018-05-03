@@ -40,7 +40,7 @@ This means that cyclic creation dependencies are impossible.
 
 ::
 
-    pragma solidity ^0.4.16;
+    pragma solidity ^0.4.22;
 
     contract OwnedToken {
         // TokenCreator is a contract type that is defined below.
@@ -52,7 +52,7 @@ This means that cyclic creation dependencies are impossible.
 
         // This is the constructor which registers the
         // creator and the assigned name.
-        function OwnedToken(bytes32 _name) public {
+        constructor(bytes32 _name) public {
             // State variables are accessed via their name
             // and not via e.g. this.owner. This also applies
             // to functions and especially in the constructors,
@@ -301,7 +301,7 @@ inheritable properties of contracts and may be overridden by derived contracts.
 
 ::
 
-    pragma solidity ^0.4.11;
+    pragma solidity ^0.4.22;
 
     contract owned {
         function owned() public { owner = msg.sender; }
@@ -315,7 +315,10 @@ inheritable properties of contracts and may be overridden by derived contracts.
         // function is executed and otherwise, an exception is
         // thrown.
         modifier onlyOwner {
-            require(msg.sender == owner);
+            require(
+                msg.sender == owner,
+                "Only owner can call this function."
+            );
             _;
         }
     }
@@ -360,7 +363,10 @@ inheritable properties of contracts and may be overridden by derived contracts.
     contract Mutex {
         bool locked;
         modifier noReentrancy() {
-            require(!locked);
+            require(
+                !locked,
+                "Reentrant call."
+            );
             locked = true;
             _;
             locked = false;
@@ -679,7 +685,7 @@ candidate, resolution fails.
         }
     }
 
-Calling ``f(50)`` would create a type error since ``250`` can be implicitly converted both to ``uint8``
+Calling ``f(50)`` would create a type error since ``50`` can be implicitly converted both to ``uint8``
 and ``uint256`` types. On another hand ``f(256)`` would resolve to ``f(uint256)`` overload as ``256`` cannot be implicitly
 converted to ``uint8``.
 
@@ -803,7 +809,7 @@ as topics. The event call above can be performed in the same way as
     }
 
 where the long hexadecimal number is equal to
-``keccak256("Deposit(address,hash256,uint256)")``, the signature of the event.
+``keccak256("Deposit(address,bytes32,uint256)")``, the signature of the event.
 
 Additional Resources for Understanding Events
 ==============================================
@@ -835,10 +841,10 @@ Details are given in the following example.
 
 ::
 
-    pragma solidity ^0.4.16;
+    pragma solidity ^0.4.22;
 
     contract owned {
-        function owned() { owner = msg.sender; }
+        constructor() { owner = msg.sender; }
         address owner;
     }
 
@@ -869,7 +875,7 @@ Details are given in the following example.
     // also a base class of `mortal`, yet there is only a single
     // instance of `owned` (as for virtual inheritance in C++).
     contract named is owned, mortal {
-        function named(bytes32 name) {
+        constructor(bytes32 name) {
             Config config = Config(0xD5f9D8D94886E70b06E474c3fB14Fd43E2f23970);
             NameReg(config.lookup(1)).register(name);
         }
@@ -907,10 +913,10 @@ Note that above, we call ``mortal.kill()`` to "forward" the
 destruction request. The way this is done is problematic, as
 seen in the following example::
 
-    pragma solidity ^0.4.0;
+    pragma solidity ^0.4.22;
 
     contract owned {
-        function owned() public { owner = msg.sender; }
+        constructor() public { owner = msg.sender; }
         address owner;
     }
 
@@ -936,10 +942,10 @@ derived override, but this function will bypass
 ``Base1.kill``, basically because it does not even know about
 ``Base1``.  The way around this is to use ``super``::
 
-    pragma solidity ^0.4.0;
+    pragma solidity ^0.4.22;
 
     contract owned {
-        function owned() public { owner = msg.sender; }
+        constructor() public { owner = msg.sender; }
         address owner;
     }
 
@@ -976,8 +982,31 @@ virtual method lookup.
 
 Constructors
 ============
-A constructor is an optional function with the same name as the contract which is executed upon contract creation. 
-Constructor functions can be either ``public`` or ``internal``.
+A constructor is an optional function declared with the ``constructor`` keyword which is executed upon contract creation. 
+Constructor functions can be either ``public`` or ``internal``. If there is no constructor, the contract will assume the
+default constructor: ``contructor() public {}``.
+
+
+::
+
+    pragma solidity ^0.4.22;
+
+    contract A {
+        uint public a;
+
+        constructor(uint _a) internal {
+            a = _a;
+        }
+    }
+
+    contract B is A(1) {
+        constructor() public {}
+    }
+
+A constructor set as ``internal`` causes the contract to be marked as :ref:`abstract <abstract-contract>`.
+
+.. note ::
+    Prior to version 0.4.22, constructors were defined as functions with the same name as the contract. This syntax is now deprecated.
 
 ::
 
@@ -995,7 +1024,6 @@ Constructor functions can be either ``public`` or ``internal``.
         function B() public {}
     }
 
-A constructor set as ``internal`` causes the contract to be marked as :ref:`abstract <abstract-contract>`.
 
 .. index:: ! base;constructor
 
@@ -1005,16 +1033,19 @@ Arguments for Base Constructors
 Derived contracts need to provide all arguments needed for
 the base constructors. This can be done in two ways::
 
-    pragma solidity ^0.4.0;
+    pragma solidity ^0.4.22;
 
     contract Base {
         uint x;
-        function Base(uint _x) public { x = _x; }
+        constructor(uint _x) public { x = _x; }
     }
 
-    contract Derived is Base(7) {
-        function Derived(uint _y) Base(_y * _y) public {
-        }
+    contract Derived1 is Base(7) {
+        constructor(uint _y) public {}
+    }
+
+    contract Derived2 is Base {
+        constructor(uint _y) Base(_y * _y) public {}
     }
 
 One way is directly in the inheritance list (``is Base(7)``).  The other is in
@@ -1024,8 +1055,9 @@ do it is more convenient if the constructor argument is a
 constant and defines the behaviour of the contract or
 describes it. The second way has to be used if the
 constructor arguments of the base depend on those of the
-derived contract. If, as in this silly example, both places
-are used, the modifier-style argument takes precedence.
+derived contract. Arguments have to be given either in the
+inheritance list or in modifier-style in the derived constuctor.
+Specifying arguments in both places is an error.
 
 .. index:: ! inheritance;multiple, ! linearization, ! C3 linearization
 
@@ -1034,12 +1066,15 @@ Multiple Inheritance and Linearization
 
 Languages that allow multiple inheritance have to deal with
 several problems.  One is the `Diamond Problem <https://en.wikipedia.org/wiki/Multiple_inheritance#The_diamond_problem>`_.
-Solidity follows the path of Python and uses "`C3 Linearization <https://en.wikipedia.org/wiki/C3_linearization>`_"
+Solidity is similar to Python in that it uses "`C3 Linearization <https://en.wikipedia.org/wiki/C3_linearization>`_"
 to force a specific order in the DAG of base classes. This
 results in the desirable property of monotonicity but
 disallows some inheritance graphs. Especially, the order in
 which the base classes are given in the ``is`` directive is
-important. In the following code, Solidity will give the
+important: You have to list the direct base contracts
+in the order from "most base-like" to "most derived".
+Note that this order is different from the one used in Python.
+In the following code, Solidity will give the
 error "Linearization of inheritance graph impossible".
 
 ::
@@ -1056,9 +1091,6 @@ The reason for this is that ``C`` requests ``X`` to override ``A``
 (by specifying ``A, X`` in this order), but ``A`` itself
 requests to override ``X``, which is a contradiction that
 cannot be resolved.
-
-A simple rule to remember is to specify the base classes in
-the order from "most base-like" to "most derived".
 
 Inheriting Different Kinds of Members of the Same Name
 ======================================================
@@ -1183,7 +1215,7 @@ more advanced example to implement a set).
 
 ::
 
-    pragma solidity ^0.4.16;
+    pragma solidity ^0.4.22;
 
     library Set {
       // We define a new struct datatype that will be used to
